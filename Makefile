@@ -6,10 +6,12 @@
 #   make disasm     - full labeled disassembly of the code region -> out/img.asm
 #   make analyze    - function discovery + call graph -> out/functions.tsv
 #   make repack     - recompress out/img.bin -> out/repacked.bin (flashable image)
-#   make roundtrip  - repack unmodified img.bin, re-extract, require byte-identical
+#   make roundtrip  - repack unmodified and modified img.bin, re-extract, require
+#                     byte-identical
 #   make checksum   - verify the firmware header checksum
 #   make test       - extract + CRC-32, ISA table checks, C-vs-Python disasm diff,
-#                     ubidec decoder/discovery checks, and the repack round trip
+#                     ubidec decoder/discovery checks, compressor edge-case
+#                     unit tests, and the repack round trip
 #   make clean
 
 CC      ?= cc
@@ -20,7 +22,9 @@ IMG     ?= out/img.bin
 
 .PHONY: all ubidis extract disasm analyze repack roundtrip checksum test clean
 
-CHAIN   ?= 128
+# LZSS hash-chain depth for repack and the round trip; 256 is repack.py's
+# default too, so `make test` checks the settings a user actually ships.
+CHAIN   ?= 256
 
 all: ubidis extract
 
@@ -47,8 +51,9 @@ analyze: $(IMG)
 repack: $(IMG)
 	$(PY) tools/repack.py $(IMG) -o out/repacked.bin --template $(FW) --chain $(CHAIN)
 
-# Round-trip test: repack the unmodified img.bin, re-extract, require it to be
-# byte-identical, and require the header checksum to verify.
+# Round-trip test: repack the unmodified img.bin and a copy with a few bytes
+# changed, re-extract each, require byte-identical results, and require the
+# header checksum to verify.
 roundtrip:
 	$(PY) tools/roundtrip_test.py $(FW) --chain $(CHAIN) --workdir out
 
@@ -57,7 +62,9 @@ checksum:
 
 test: checksum
 	$(PY) tests/run_tests.py
+	$(PY) tests/test_arj_compress.py
 	$(PY) tools/roundtrip_test.py $(FW) --chain $(CHAIN) --workdir out
 
 clean:
-	rm -rf bin out/img.bin out/img.asm out/functions.tsv out/repacked.bin out/img_rt.bin
+	rm -rf bin out/img.bin out/img.asm out/functions.tsv out/repacked.bin out/img_rt.bin \
+	       out/img_repacked.bin out/img_mod.bin out/img_mod_repacked.bin out/img_mod_rt.bin
