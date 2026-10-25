@@ -101,6 +101,15 @@ def test_sources():
     for s in ("fetch.sh", "build.sh"):
         r = subprocess.run(["sh", "-n", os.path.join(TC, "scripts", s)])
         check(r.returncode == 0, f"scripts/{s} parses")
+    # Objects are named by basename: two sources with one name must not merge.
+    dup = subprocess.run(["make", "-n", "-C", TC, "patch", "SRC=a/foo.c b/foo.cpp c/bar.c"],
+                         capture_output=True, text=True)
+    check(dup.returncode != 0 and "same name (foo)" in dup.stderr,
+          "make patch refuses two SRC files with the same name"
+          + (f" ({dup.stderr.strip()[-200:]})" if dup.stderr else " (no error)"))
+    ok = subprocess.run(["make", "-n", "-C", TC, "clean", "SRC=a/foo.c b/bar.c"],
+                        capture_output=True, text=True)
+    check(ok.returncode == 0, "...and accepts distinct names" + (f" ({ok.stderr.strip()[-200:]})" if ok.returncode else ""))
 
 
 def test_patcher():
@@ -315,6 +324,41 @@ def test_toolchain(prefix):
         check_abi(insns, "test cases + libgcc")
 
 
+def test_gap_unreferenced():
+    """The free-gap facts in docs/FORMAT.md, re-derived from out/img.bin."""
+    img_path = os.path.join(ROOT, "out", "img.bin")
+    if not os.path.exists(img_path):
+        print("  skip gap scan: out/img.bin missing (run `make extract`)")
+        return
+    print("free gap in out/img.bin")
+    import ubidis
+    img = open(img_path, "rb").read()
+    check(dp.GAP_START == dp.BASE + len(img), f"stock image ends at 0x{dp.BASE + len(img):08x}")
+    # moveai An,#imm24 sets An = imm24 << 7 (major opcode 0b11100). A pointer
+    # into the gap is a moveai base inside it, or up to 8 KB below it plus a
+    # lea/load offset.
+    bases = {}
+    for off in range(0, dp.CODE_END - dp.BASE, 4):
+        w = struct.unpack_from(">I", img, off)[0]
+        if w >> 27 != 0x1c:
+            continue
+        m = re.fullmatch(r"moveai a\d,#(0x[0-9a-f]+)", ubidis.disasm_one(w, dp.BASE + off)[0])
+        if m:
+            bases.setdefault(int(m.group(1), 16) << 7, []).append(dp.BASE + off)
+    near = sorted(a for a in bases if dp.GAP_START - 0x2000 <= a < dp.GAP_END)
+    check(not near, "no moveai base in or just below the gap"
+          + (f" ({', '.join(f'0x{a:08x}' for a in near[:5])})" if near else ""))
+    check(0x40000000 + 0x5c in bases.get(dp.GAP_END, []),
+          f"the startup's moveai a1,#0x80ca00 at 0x4000005c starts .bss at 0x{dp.GAP_END:08x}"
+          f" ({len(bases.get(dp.GAP_END, []))} moveai load that address)")
+    # 32-bit data words: the only ones in range are text in a certificate.
+    words = [off for off in range(0, len(img) - 3, 4)
+             if dp.GAP_START <= struct.unpack_from(">I", img, off)[0] < dp.GAP_END]
+    text = [o for o in words if img[o:o + 4].isascii() and img[o + 1:o + 4].isalpha()]
+    check(words == text, f"no data word points into the gap ({len(words)} in range, all ASCII text: "
+          + ", ".join(f"0x{o:x} {img[o:o + 4]!r}" for o in words[:3]) + ")")
+
+
 def test_patch_image(prefix):
     img = os.path.join(ROOT, "out", "img.bin")
     if not os.path.exists(img):
@@ -324,14 +368,15 @@ def test_patch_image(prefix):
     import ubidis
     with tempfile.TemporaryDirectory() as td:
         out = os.path.join(td, "img_patched.bin")
+        pb = os.path.join(td, "patch")  # not build/patch: keep the user's last `make patch`
         r = subprocess.run(["make", "-s", "-C", TC, "patch", f"PREFIX={prefix}", f"OUT={out}",
-                            f"IMG={img}"], capture_output=True, text=True)
+                            f"IMG={img}", f"PB={pb}"], capture_output=True, text=True)
         check(r.returncode == 0, "make patch builds examples/hook"
               + (f": {(r.stdout + r.stderr).strip()[-400:]}" if r.returncode else ""))
         if r.returncode:
             return
         a, b = open(img, "rb").read(), open(out, "rb").read()
-        nm = subprocess.run([prefix + "/bin/ubicom32-elf-nm", os.path.join(TC, "build/patch/patch.elf")],
+        nm = subprocess.run([prefix + "/bin/ubicom32-elf-nm", os.path.join(pb, "patch.elf")],
                             capture_output=True, text=True).stdout
         fn = int(re.search(r"([0-9a-f]+) T my_replacement", nm).group(1), 16)
         w0, w1 = struct.unpack(">II", b[0xfc4:0xfcc])
@@ -361,6 +406,7 @@ def test_patch_image(prefix):
 def main():
     test_sources()
     test_patcher()
+    test_gap_unreferenced()
     prefix = find_prefix()
     if prefix:
         test_toolchain(prefix)

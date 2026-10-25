@@ -93,7 +93,10 @@ make repack IMG=out/img_patched.bin                  # -> out/repacked.bin
 (or relative to `toolchain/`). `make patch` compiles `SRC`. `dir655patch.py ldscript` then generates a
 linker script. `ubicom32-elf-gcc -T` links the objects with libgcc into
 `toolchain/build/patch/patch.elf` (a listing and a map file are saved next to
-it), and `dir655patch.py apply` writes the result into a copy of the image.
+it; `PB=dir` puts the build somewhere else), and `dir655patch.py apply` writes
+the result into a copy of the image. Objects are named after their source
+files, so two `SRC` files can't share a name (`a/foo.c` and `b/foo.cpp`):
+`make patch` stops and names the clash.
 
 **Where the code goes.** `img.bin` runs at `0x40000000`, and the stock image
 ends at `0x40641d00`. The firmware's startup code zeroes `.bss` starting at
@@ -102,7 +105,10 @@ anything between those two addresses, so `.text`, `.rodata`, `.data` and `.bss`
 of your code are linked there. That gives **58,112 bytes**, and the link fails if
 the code doesn't fit. `img.bin` grows by what you use, and `repack.py` records
 the new size. It hasn't been tested whether the router's loader accepts a
-larger image, or whether nothing at runtime uses that gap.
+larger image, or whether nothing at runtime uses that gap. How these bounds were
+found, and the scan that backs the "nothing refers to it" claim, are in
+[docs/FORMAT.md](../docs/FORMAT.md#free-gap-after-the-image-0x40641d000x40650000).
+`make test` repeats that scan.
 
 **Hooking a firmware function.** In your C file, at file scope:
 

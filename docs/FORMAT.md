@@ -140,3 +140,29 @@ runtime memory map: code/rodata are referenced at low addresses, and RAM data
 structures cluster around `0x007FFxxx`–`0x0080xxxx`. Ubicom32's 32-bit
 absolute relocations zero the top byte, giving a 24-bit (16 MB) effective
 address space.
+
+### Free gap after the image (`0x40641d00`..`0x40650000`)
+
+`img.bin` runs at `0x40000000` (see docs/DECOMPILER.md for how that base was
+established), so the stock 6,561,024-byte (`0x641d00`) image ends at
+**`0x40641d00`**. The C runtime's `.bss` starts at **`0x40650000`**: the
+startup (docs/sample_startup.asm, `0x4000005c`) runs `moveai a1,#0x80ca00`, and
+`moveai` sets the register to `imm24 << 7`, so `0x80ca00 << 7 = 0x40650000`.
+The loop that follows stores zero words from there. 25 `moveai` in the code
+region load that same address.
+
+Nothing in the image refers to the 58,112 bytes between the two addresses:
+
+- No `moveai` in the code region (`0x0`..`0x148000`) has a base in the gap.
+  The highest base below it is `0x40174b00`, nearly 5 MB lower, so no
+  `moveai`+`lea`/load offset reaches it either.
+- Of all the aligned 32-bit words in the image, only two fall in
+  `0x40641d00`..`0x4064ffff`: `0x5188f4` and `0x5189c0`. Both are the text
+  `"@dli"` from `support@dlink.com` inside an X.509 certificate, not pointers.
+
+The toolchain (toolchain/README.md) links new code into this gap. `make test`
+re-derives these facts from `out/img.bin` (toolchain/tests/run_tests.py,
+`test_gap_unreferenced`). Two things are still untested on hardware: whether the
+boot loader accepts an `img.bin` that is longer than the stock one, and whether
+something at runtime (the loader, ipOS's heap setup) writes to the gap without
+a pointer that is visible in the image.

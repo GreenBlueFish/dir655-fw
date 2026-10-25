@@ -12,7 +12,8 @@
 #   make test       - extract + CRC-32, ISA table checks, C-vs-Python disasm diff,
 #                     ubidec decoder/discovery checks, compressor edge-case
 #                     unit tests, the repack round trip, and the
-#                     toolchain/ checks (see toolchain/README.md)
+#                     toolchain/ checks (see toolchain/README.md); one line
+#                     per suite, full logs in out/test-*.log, V=1 for all
 #   make clean
 
 CC      ?= cc
@@ -61,12 +62,29 @@ roundtrip:
 checksum:
 	$(PY) tools/fix_checksum.py --check $(FW)
 
-test: checksum
-	$(PY) tests/run_tests.py
-	$(PY) tests/test_arj_compress.py
-	$(PY) tools/roundtrip_test.py $(FW) --chain $(CHAIN) --workdir out
-	$(PY) toolchain/tests/run_tests.py
+# Each suite's full output goes to out/test-<name>.log and only its last line
+# is printed, so the whole run fits a short log; a failing suite prints its
+# FAIL lines and the tail of its log. `make test V=1` prints everything.
+V ?=
+ifeq ($(V),1)
+suite = $(2)
+else
+suite = @mkdir -p out; if $(2) > out/test-$(1).log 2>&1; then \
+	  echo "PASS $(1): $$(tail -n 1 out/test-$(1).log)"; \
+	else \
+	  echo "FAIL $(1) (full log: out/test-$(1).log)"; grep -E 'FAIL' out/test-$(1).log; \
+	  echo "--- last 30 lines:"; tail -n 30 out/test-$(1).log; exit 1; \
+	fi
+endif
+
+test:
+	$(call suite,checksum,$(PY) tools/fix_checksum.py --check $(FW))
+	$(call suite,disasm,$(PY) tests/run_tests.py)
+	$(call suite,compress,$(PY) tests/test_arj_compress.py)
+	$(call suite,roundtrip,$(PY) tools/roundtrip_test.py $(FW) --chain $(CHAIN) --workdir out)
+	$(call suite,toolchain,$(PY) toolchain/tests/run_tests.py)
+	@echo "all test suites passed"
 
 clean:
-	rm -rf bin out/img.bin out/img.asm out/functions.tsv out/repacked.bin out/img_rt.bin \
+	rm -rf bin out/test-*.log out/img.bin out/img.asm out/functions.tsv out/repacked.bin out/img_rt.bin \
 	       out/img_repacked.bin out/img_mod.bin out/img_mod_repacked.bin out/img_mod_rt.bin

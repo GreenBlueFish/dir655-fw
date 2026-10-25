@@ -48,7 +48,9 @@ python3 tools/ubidis.py --listing -s 0 -n 0x148000 out/img.bin > out/img.asm
 #    ... or:  make disasm
 
 # 4. Run the checks: extract + CRC-32, ISA tables, and (if a C compiler is
-#    present) the C disassembler diffed against the Python one
+#    present) the C disassembler diffed against the Python one. Each suite
+#    prints one line; its full output is in out/test-<suite>.log, and
+#    `make test V=1` prints everything
 make test
 
 # Native (faster) disassembler, if you have a C compiler:
