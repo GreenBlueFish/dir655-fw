@@ -216,7 +216,7 @@ int main(int argc, char **argv)
         if (do_targets && ist) {
             long foff = (long)tgt - (long)base_va + start;
             if (foff >= 0 && foff < fsz)
-                printf("\t; %s 0x%x", isc ? "call->" : "->", tgt);
+                printf("\t; %s0x%x", isc ? "call->" : "->", tgt);
         }
         printf("\n");
     }

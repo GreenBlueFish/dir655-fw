@@ -145,7 +145,40 @@ for m in pat.finditer(opc):
         tmpl.append(("lit", c))
     entries.append((base, mask, mnem, tmpl))
 
-# Sort by popcount(mask) descending so most-specific matches win; stable.
+# Collapse encodings that the reference lists twice under different names.
+# Only one entry per (base, mask) can ever match, so the other is dead and
+# which one won used to depend on CGEN source order. Make the choice explicit:
+# ALIAS_DROP maps a mnemonic to the mnemonic it yields to when both share a
+# (base, mask) and the same operand template. `iwrite` is the IP3K-specific
+# name for what is encoded exactly as `move.4` to an address; we render the
+# generic `move.4`. Any other collision is an error, so a new one gets decided
+# here rather than silently by sort order.
+ALIAS_DROP = {"iwrite": "move.4"}
+by_key = {}
+for e in entries:
+    by_key.setdefault((e[0], e[1]), []).append(e)
+deduped = []
+for e in entries:
+    group = by_key[(e[0], e[1])]
+    if len(group) == 1:
+        deduped.append(e)
+        continue
+    keep = ALIAS_DROP.get(e[2])
+    if keep is not None and any(o[2] == keep and o[3] == e[3] for o in group):
+        continue                       # shadowed alias; the canonical stays
+    others = [o for o in group if o is not e]
+    if all(ALIAS_DROP.get(o[2]) == e[2] and o[3] == e[3] for o in others):
+        deduped.append(e)
+        continue
+    sys.exit("unresolved (base,mask) collision 0x%08x/0x%08x: %s"
+             % (e[0], e[1], ", ".join(o[2] for o in group)))
+entries = deduped
+
+# Sort by popcount(mask) descending so most-specific matches win; ties keep
+# reference order (stable sort). After the dedup above no two entries share a
+# (base, mask). Distinct entries of equal specificity can still both match one
+# word (e.g. a src-mode and a dest-mode form of move.4); the earlier one in
+# this table wins, in ubidis.py and ubidis.c alike.
 def popcount(x): return bin(x).count("1")
 entries.sort(key=lambda e: -popcount(e[1]))
 

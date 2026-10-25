@@ -17,7 +17,8 @@ which was read purely as a reference — no third-party code is vendored here.
 
 Validation that these are correct, not merely plausible:
 
-- The ~1.28 MB code region decodes with **100% known opcodes**.
+- The ~1.28 MB code region (0x0..0x148000) decodes with **99.82% known
+  opcodes** (335,277 of 335,872 words; `make test` holds this as a floor).
 - **100.000%** of 72,608 branch/call targets are 4-byte aligned (random would
   be ~25%), and 91% land inside the code region. This proves the instruction
   width, endianness, and PC-relative offset math simultaneously.
@@ -79,6 +80,12 @@ extensions. DSP-specific operand *suffixes* (e.g. some `mac`/`msub`
 accumulator selectors) are rendered conservatively; the base integer,
 load/store, move and control-flow instructions — i.e. essentially all of what
 a C compiler emits, and what you need to read and patch the firmware — are
-rendered fully. A handful of addressing-mode aliases share an identical
-`(base,mask)`; the disassembler picks one faithful rendering (e.g. it may show
-`0(aN)` where `(aN)` would also be valid).
+rendered fully. The binutils reference lists 35 encodings twice, as both `move.4` and
+`iwrite` (the IP3K name for the same move-to-address encoding) with identical
+operands. The table keeps only `move.4` for these; `tools/gen_isa_table.py`
+does this through an explicit `ALIAS_DROP` rule and refuses any other
+`(base,mask)` collision, and `make test` checks that none remain. Separately,
+some distinct encodings of equal specificity can both match one word (e.g. a
+source-mode and a destination-mode form of the same `move`); the one earlier in
+the table wins, identically in `ubidis.py` and `ubidis.c`. So the disassembler
+may show `0(aN)` where `(aN)` would also be valid.
