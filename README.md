@@ -56,6 +56,39 @@ make ubidis          # builds bin/ubidis
 bin/ubidis -s 0 -n 0x148000 out/img.bin
 ```
 
+## Modifying and repacking the firmware
+
+The toolkit goes both ways. To change the firmware, edit the decompressed
+`out/img.bin` (patch code via the disassembly, or edit the web-UI resources in
+its upper region), then **repack** it into a complete, re-checksummed image:
+
+```sh
+# recompress out/img.bin -> out/repacked.bin (header, loader, ARJ archive,
+# recomputed CRCs and image checksum all rebuilt)
+python3 tools/repack.py out/img.bin -o out/repacked.bin
+#    ... or:  make repack
+
+# prove the pipeline is lossless: repack the *unmodified* img.bin, re-extract,
+# and require a byte-identical result + a valid checksum
+make test
+```
+
+`tools/repack.py` recompresses with a **from-scratch ARJ method-1 encoder**
+(`tools/arj_compress.py`, the exact inverse of the decoder), regenerates the
+ARJ member header (compressed size, original size, data CRC-32, header
+CRC-32), re-emits the end-of-archive marker, preserves the 4-byte flash
+trailer, pads to the flash size, and fixes the image-header checksum. The
+compressed stream it produces is actually a little **smaller** than the stock
+one (≈1.38 MB vs 1.45 MB), so a repacked image comfortably fits the 1.47 MB
+flash budget. A full repack takes ~15 s in pure Python.
+
+> **Unverified:** the round-trip (repack → extract) is provably lossless and
+> the checksums are correct, but **no repacked image has been flashed to a real
+> DIR-655**. Whether the stock loader accepts a differently-sized compressed
+> member, and whether the 4-byte flash trailer carries anything the loader
+> checks, are inferred from the format — not confirmed on hardware. Flash at
+> your own risk, ideally with a serial console / recovery (TFTP) path ready.
+
 ## Repository layout
 
 ```
@@ -63,6 +96,9 @@ dir655_firmware_121.bin   the stock firmware image (input)
 tools/
   extract.py              parse container + decompress  -> out/img.bin
   arj_decompress.py        from-scratch ARJ method-1 decoder (CRC-verified)
+  arj_compress.py          from-scratch ARJ method-1 encoder (inverse of above)
+  repack.py                rebuild a flashable image from img.bin  -> out/repacked.bin
+  roundtrip_test.py        `make test`: repack unmodified img.bin and re-extract
   fix_checksum.py          verify / recompute the header CRC-32
   ubidis.py                from-scratch Ubicom32 disassembler (validated)
   gen_isa_table.py         one-time ISA-fact extractor (provenance; see below)
