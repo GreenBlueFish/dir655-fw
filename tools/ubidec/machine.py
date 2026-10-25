@@ -3,7 +3,8 @@ Machine-level analysis: the image, function discovery, control-flow graphs,
 and a small abstract interpreter that tracks the stack pointer, the return
 address, constants and jump tables through each function.
 
-Nothing here produces C; it gives the lifter (lift.py) the facts it needs:
+Nothing here produces C; it gives a later lifter (not written yet; see
+docs/DECOMPILER.md, "What remains for C output") the facts it needs:
 where functions start and end, which `ret`/`calli` is a return, which is a
 switch, what offset from the entry stack pointer every sp-relative access has.
 """
@@ -100,7 +101,8 @@ class Block(object):
         self.start = start
         self.end = start          # address after the last instruction
         self.succs = []           # successor block addresses
-        self.kind = "fall"        # fall|jmp|cjmp|ret|tail|switch|ijmp|stop
+        self.kind = "fall"        # fall|jmp|cjmp|ret|tail|switch|ijmp|stop|
+                                  # noreturn|fragret (program.py)
         self.insns = []
         self.target = None        # tail-call target / indirect target
         self.table = None         # switch: (index EA, [targets])

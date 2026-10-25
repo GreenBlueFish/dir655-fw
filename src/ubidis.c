@@ -25,7 +25,7 @@
 enum {
     K_DREG, K_AREG, K_UIMM, K_SIMM, K_DIRECT, K_I4, K_IMM7,
     K_IMM24, K_OFF21, K_OFF24, K_OFF16, K_CC, K_CFLAG, K_PFLAG,
-    K_ACC, K_SKIP
+    K_ACC, K_SKIP, K_PDEC
 };
 
 /* ---- template token kinds ---- */
@@ -118,6 +118,12 @@ static int render_op(char *buf, const struct tok *t, uint32_t w,
     case K_CFLAG: return xf(w, 21, 1) ? 0 : sprintf(buf, ".s");
     case K_PFLAG: return sprintf(buf, "%s", xf(w, 22, 1) ? ".t" : ".f");
     case K_SKIP:  return 0;
+    case K_PDEC: {
+        /* pdec's source offset: the s1 imm7 field (bits 9:8, 4:0) counts
+         * words down from An - 512, so the operand is An - 4*(128 - off7). */
+        int32_t off7 = (int32_t)((xf(w, 9, 2) << 5) | xf(w, 4, 5));
+        return sprintf(buf, "%d", (off7 - 128) * 4);
+    }
     }
     return 0;
 }

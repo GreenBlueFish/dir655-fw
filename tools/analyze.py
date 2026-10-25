@@ -5,6 +5,9 @@ analyze - whole-program analysis of img.bin with tools/ubidec.
 Writes a tab-separated function table: one row per discovered function with
 its entry address, how it was found (call / pointer / orphan), size, block
 counts by kind, direct callers and direct callees (the call graph).
+`fragret` counts returns made through an enclosing function's frame and
+`parent` names that function (a switch case or alternate entry found on its
+own; see Program.resolve_shared_returns).
 
 Usage:  python3 tools/analyze.py out/img.bin out/functions.tsv
 """
@@ -35,8 +38,12 @@ def summary(img, prog):
     return {"functions": len(prog.funcs), "how": dict(how),
             "blocks": dict(kinds), "covered": len(prog.owner),
             "valid": valid,
+            # only functions that were kept: a pointer or orphan candidate
+            # that flows into data or invalid code is rejected, not counted
             "flow_errors": sum(len(f.asm_reasons)
-                               for f in prog.funcs.values())}
+                               for f in prog.funcs.values()),
+            "rejected": len(prog.rejected),
+            "ijmp": {k: len(v) for k, v in prog.ijmp_groups().items()}}
 
 
 def main():
@@ -51,15 +58,20 @@ def main():
             k = collections.Counter(b.kind for b in f.blocks.values())
             insns = [i for b in f.blocks.values() for i in b.insns]
             callees = sorted({i.target for i in insns if i.mn == "call"})
-            out.write("0x%08x\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n" % (
-                e, f.how, len(insns), len(f.blocks), k["ret"], k["switch"],
-                k["ijmp"], k["tail"],
+            parent = getattr(f, "parent", None)
+            out.write("0x%08x\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\n"
+                      % (e, f.how, len(insns), len(f.blocks), k["ret"],
+                         k["switch"], k["ijmp"], k["tail"], k["fragret"],
+                         "0x%08x" % parent if parent else "",
                 ",".join("0x%08x" % c for c in sorted(f.callers)),
                 ",".join("0x%08x" % c for c in callees)))
     s = summary(img, prog)
     sys.stderr.write("%d functions %s; %d/%d valid code words covered; "
                      "blocks %s\n" % (s["functions"], s["how"], s["covered"],
                                       s["valid"], s["blocks"]))
+    sys.stderr.write("unresolved indirect jumps by group %s; %d pointer/orphan "
+                     "candidates rejected for flowing into data\n"
+                     % (s["ijmp"], s["rejected"]))
 
 
 if __name__ == "__main__":
