@@ -107,9 +107,13 @@ after patching the size/CRC fields.
 
 ### Correctness and limits
 
-`make test` recompresses the **unmodified** `img.bin`, re-extracts it, and
-requires a byte-identical result plus a valid header checksum — proving the
-repack path is a true inverse of extract. The encoder's output is ~1.38 MB,
+`make test` recompresses the **unmodified** `img.bin` and a copy with a few
+bytes changed, re-extracts each through `extract.py`, and requires
+byte-identical results plus a valid header checksum — proving the repack path
+is a true inverse of extract. `tests/test_arj_compress.py` separately drives
+the encoder's constant-tree fallbacks (a block whose code, temp or position
+alphabet has a single symbol), which the stock image never reaches but a
+low-entropy modification could. The encoder's output is ~1.38 MB,
 slightly smaller than the stock 1.45 MB stream, so a repacked image fits the
 flash. **Not verified on hardware:** no repacked image has been flashed to a
 real DIR-655, so the loader's tolerance of a resized compressed member and the

@@ -62,8 +62,9 @@ its upper region), then **repack** it into a complete, re-checksummed image:
 python3 tools/repack.py out/img.bin -o out/repacked.bin
 #    ... or:  make repack
 
-# prove the pipeline is lossless: repack the *unmodified* img.bin, re-extract,
-# and require a byte-identical result + a valid checksum
+# prove the pipeline is lossless: repack the unmodified img.bin and a copy with
+# a few bytes changed, re-extract each with extract.py, and require
+# byte-identical results + valid checksums
 make test
 ```
 
@@ -87,12 +88,15 @@ flash budget. A full repack takes ~15 s in pure Python.
 
 ```
 dir655_firmware_121.bin   the stock firmware image (input)
+tests/
+  run_tests.py             `make test`: extract, ISA tables, C-vs-Python disasm
+  test_arj_compress.py     `make test`: encoder single-symbol/empty-tree edge cases
 tools/
   extract.py              parse container + decompress  -> out/img.bin
   arj_decompress.py        from-scratch ARJ method-1 decoder (CRC-verified)
   arj_compress.py          from-scratch ARJ method-1 encoder (inverse of above)
   repack.py                rebuild a flashable image from img.bin  -> out/repacked.bin
-  roundtrip_test.py        `make test`: repack unmodified img.bin and re-extract
+  roundtrip_test.py        `make test`: repack unmodified + modified img.bin, re-extract
   fix_checksum.py          verify / recompute the header CRC-32
   ubidis.py                from-scratch Ubicom32 disassembler (validated)
   gen_isa_table.py         one-time ISA-fact extractor (provenance; see below)

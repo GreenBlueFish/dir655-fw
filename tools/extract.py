@@ -60,14 +60,11 @@ def parse_arj_header(d, pos):
                 crc=crc, fname=fname, data_off=p, hdr_off=pos)
 
 
-def main():
-    if len(sys.argv) < 2:
-        sys.exit("usage: extract.py <firmware.bin> [out/img.bin]")
-    inp = sys.argv[1]
-    outp = sys.argv[2] if len(sys.argv) > 2 else "out/img.bin"
-    d = open(inp, "rb").read()
-    print("firmware: %s (%d bytes)" % (inp, len(d)))
+def find_member(d):
+    """Locate the ARJ archive in a firmware image.
 
+    Returns (main_hdr, member) header dicts; exits if there is no archive.
+    """
     # Locate the first ARJ header (the archive main header).
     arj = d.find(ARJ_MAGIC)
     while arj != -1:
@@ -79,23 +76,38 @@ def main():
         arj = d.find(ARJ_MAGIC, arj + 1)
     if arj == -1:
         sys.exit("no ARJ archive found")
-
     main_hdr = parse_arj_header(d, arj)
-    print("ARJ archive @0x%x  (name=%r)" % (arj, main_hdr["fname"]))
-
     # The member header follows the main header's compressed-data area (empty).
     member = parse_arj_header(d, main_hdr["data_off"])
-    print("member: %r  method=%d  comp=%d  orig=%d  crc=0x%08x  data@0x%x"
-          % (member["fname"], member["method"], member["csize"],
-             member["osize"], member["crc"], member["data_off"]))
+    return main_hdr, member
 
+
+def extract_img(d, member=None):
+    """Decompress the img.bin member of firmware bytes d (size + CRC verified)."""
+    if member is None:
+        member = find_member(d)[1]
     if member["method"] not in (1, 2, 3):
         sys.exit("unsupported ARJ method %d (this decoder handles 1-3)"
                  % member["method"])
-
     comp = d[member["data_off"]:member["data_off"] + member["csize"]]
-    print("decompressing %d -> %d bytes ..." % (len(comp), member["osize"]))
-    out = decompress(comp, member["osize"], member["crc"])
+    return decompress(comp, member["osize"], member["crc"])
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit("usage: extract.py <firmware.bin> [out/img.bin]")
+    inp = sys.argv[1]
+    outp = sys.argv[2] if len(sys.argv) > 2 else "out/img.bin"
+    d = open(inp, "rb").read()
+    print("firmware: %s (%d bytes)" % (inp, len(d)))
+
+    main_hdr, member = find_member(d)
+    print("ARJ archive @0x%x  (name=%r)" % (main_hdr["hdr_off"], main_hdr["fname"]))
+    print("member: %r  method=%d  comp=%d  orig=%d  crc=0x%08x  data@0x%x"
+          % (member["fname"], member["method"], member["csize"],
+             member["osize"], member["crc"], member["data_off"]))
+    print("decompressing %d -> %d bytes ..." % (member["csize"], member["osize"]))
+    out = extract_img(d, member)
     print("OK: size and CRC-32 verified (0x%08x)" % member["crc"])
 
     os.makedirs(os.path.dirname(outp) or ".", exist_ok=True)
