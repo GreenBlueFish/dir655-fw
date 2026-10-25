@@ -11,6 +11,11 @@ End-to-end checks for the toolkit (run with `make test`).
 4. If a C compiler is available ($CC, cc, gcc, clang, or `zig cc`), bin/ubidis
    is built and its output on the code region must match ubidis.py byte for
    byte. With no compiler this step is skipped, unless REQUIRE_CC=1.
+5. tools/ubidec: the structured decoder agrees with the ISA table on every
+   code word the table accepts, decodes known operands correctly (moveai
+   shift, negative pdec offset, cmpi immediate field), and whole-program
+   discovery holds its function / coverage / switch-table floors with no
+   flow errors.
 
 Exits non-zero on the first failure.
 """
@@ -124,6 +129,61 @@ def test_c(tmp, img, py_out):
                                   *(diff[0] if diff else (b"", b""))))
 
 
+# Floors from when tools/ubidec was written (docs/DECOMPILER.md).
+MIN_FUNCS = 6855
+MIN_COVERED = 334726
+MIN_SWITCH = 131
+
+
+def test_ubidec(img):
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    sys.path.insert(0, os.path.join(ROOT, "src"))
+    import ubidis
+    from ubidec.decode import decode
+    from ubidec.machine import BASE
+    import analyze
+    data = open(img, "rb").read()
+    bad = 0
+    for o in range(0, 0x148000, 4):
+        w = int.from_bytes(data[o:o + 4], "big")
+        e = ubidis.match(w)
+        if e is None:
+            continue
+        a = {"iwrite": "move.4"}.get(e[2], e[2])
+        if a.startswith("jmp"):
+            a = "jmp"
+        if decode(w, BASE + o).mn != a:
+            bad += 1
+    check(bad == 0, "ubidec decoder agrees with the ISA table (%d mismatches)"
+          % bad)
+
+    def at(off):
+        return decode(int.from_bytes(data[off:off + 4], "big"), BASE + off)
+    i = at(0x8)
+    check(i.mn == "moveai" and i.imm == 0x7ffa00 << 7,
+          "moveai loads imm24 << 7 (0x%x)" % (i.imm or 0))
+    i = at(0x8b4)
+    check(i.mn == "pdec" and i.s1.kind == "mem" and i.s1.a == 7
+          and i.s1.b == -44, "pdec offset is negative: sp - 44 (%r)" % i.s1)
+    i = at(0x1d8)
+    check(i.mn == "cmpi" and i.imm == 19, "cmpi immediate in bits 26:11")
+    i = at(0x4)
+    check(i.mn == "call" and i.target == BASE + 0x12c and i.link == 5,
+          "call target and link register")
+
+    img_, prog = analyze.analyze(img)
+    s = analyze.summary(img_, prog)
+    check(s["functions"] >= MIN_FUNCS, "functions discovered >= %d (got %d)"
+          % (MIN_FUNCS, s["functions"]))
+    check(s["covered"] >= MIN_COVERED, "code words claimed by a function "
+          ">= %d (got %d of %d)" % (MIN_COVERED, s["covered"], s["valid"]))
+    check(s["blocks"].get("switch", 0) >= MIN_SWITCH,
+          "jump tables resolved >= %d (got %d)"
+          % (MIN_SWITCH, s["blocks"].get("switch", 0)))
+    check(s["flow_errors"] == 0, "no function flows into data or invalid "
+          "code (%d)" % s["flow_errors"])
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         img = test_extract(tmp)
@@ -131,6 +191,7 @@ def main():
         if img:
             py_out = disasm_py(img)
             test_c(tmp, img, py_out)
+            test_ubidec(img)
     print("FAILED" if failed else "all checks passed")
     sys.exit(1 if failed else 0)
 

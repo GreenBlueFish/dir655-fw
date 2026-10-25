@@ -4,6 +4,7 @@
 #   make ubidis     - build the native C Ubicom32 disassembler (needs a C compiler)
 #   make extract    - decompress the firmware -> out/img.bin (needs python3)
 #   make disasm     - full labeled disassembly of the code region -> out/img.asm
+#   make analyze  - function discovery + call graph -> out/functions.tsv
 #   make checksum   - verify the firmware header checksum
 #   make test       - extract + CRC-32, ISA table checks, C-vs-Python disasm diff
 #   make clean
@@ -14,7 +15,7 @@ PY      ?= python3
 FW      ?= dir655_firmware_121.bin
 IMG     ?= out/img.bin
 
-.PHONY: all ubidis extract disasm checksum test clean
+.PHONY: all ubidis extract disasm analyze checksum test clean
 
 all: ubidis extract
 
@@ -33,6 +34,10 @@ disasm: $(IMG)
 	$(PY) tools/ubidis.py --listing -s 0 -n 0x148000 -b 0 $(IMG) > out/img.asm
 	@echo "wrote out/img.asm"
 
+analyze: $(IMG)
+	$(PY) tools/analyze.py $(IMG) out/functions.tsv
+	@echo "wrote out/functions.tsv"
+
 checksum:
 	$(PY) tools/fix_checksum.py --check $(FW)
 
@@ -40,4 +45,4 @@ test: checksum
 	$(PY) tests/run_tests.py
 
 clean:
-	rm -rf bin out/img.bin out/img.asm
+	rm -rf bin out/img.bin out/img.asm out/functions.tsv

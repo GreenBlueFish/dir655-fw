@@ -22,6 +22,12 @@ plus everything needed to get from the raw flash image to readable assembly:
    ~1.28 MB code region at **99.82% known instructions**, with
    **100.000%** of all branch/call targets landing on valid 4-byte boundaries.
    See [`docs/ISA.md`](docs/ISA.md).
+4. **Program structure, the first step towards C** (`tools/ubidec/`, `make analyze`):
+   6,855 functions with their call graph, control-flow graphs and 131 resolved
+   switch tables, plus the CPU semantics and calling convention pinned down
+   against the binary. No C is emitted yet. See
+   [`docs/DECOMPILER.md`](docs/DECOMPILER.md) for what is recovered, what
+   remains, and what can only ever be shown as assembly.
 
 Nothing third-party is vendored. The ISA opcode *facts* were derived from the
 public GPL Ubicom32 binutils description (read as a reference); all code here —
@@ -60,6 +66,8 @@ tools/
   fix_checksum.py          verify / recompute the header CRC-32
   ubidis.py                from-scratch Ubicom32 disassembler (validated)
   gen_isa_table.py         one-time ISA-fact extractor (provenance; see below)
+  analyze.py               function discovery + call graph -> out/functions.tsv
+  ubidec/                  decoder, CFG + abstract interpreter, discovery
 src/
   ubidis.c                 native C port of the disassembler
   ubicom32_isa.inc         ISA fact table (C)      } same facts,
@@ -67,6 +75,7 @@ src/
 docs/
   FORMAT.md                container format, memory map, checksum
   ISA.md                   Ubicom32 encoding notes + validation evidence
+  DECOMPILER.md            recovered structure, semantics/ABI, remaining work
   functions.txt            4,890 discovered function entry points
   sample_startup.asm       labeled disassembly of the C-runtime startup
 Makefile                   build / extract / disasm / checksum targets
