@@ -4,12 +4,14 @@
 #   make ubidis     - build the native C Ubicom32 disassembler (needs a C compiler)
 #   make extract    - decompress the firmware -> out/img.bin (needs python3)
 #   make disasm     - full labeled disassembly of the code region -> out/img.asm
+#   make analyze    - function discovery + call graph -> out/functions.tsv
 #   make repack     - recompress out/img.bin -> out/repacked.bin (flashable image)
 #   make roundtrip  - repack unmodified and modified img.bin, re-extract, require
 #                     byte-identical
 #   make checksum   - verify the firmware header checksum
 #   make test       - extract + CRC-32, ISA table checks, C-vs-Python disasm diff,
-#                     compressor edge-case unit tests, and the repack round trip
+#                     ubidec decoder/discovery checks, compressor edge-case
+#                     unit tests, and the repack round trip
 #   make clean
 
 CC      ?= cc
@@ -18,7 +20,7 @@ PY      ?= python3
 FW      ?= dir655_firmware_121.bin
 IMG     ?= out/img.bin
 
-.PHONY: all ubidis extract disasm repack roundtrip checksum test clean
+.PHONY: all ubidis extract disasm analyze repack roundtrip checksum test clean
 
 # LZSS hash-chain depth for repack and the round trip; 256 is repack.py's
 # default too, so `make test` checks the settings a user actually ships.
@@ -41,6 +43,10 @@ disasm: $(IMG)
 	$(PY) tools/ubidis.py --listing -s 0 -n 0x148000 -b 0 $(IMG) > out/img.asm
 	@echo "wrote out/img.asm"
 
+analyze: $(IMG)
+	$(PY) tools/analyze.py $(IMG) out/functions.tsv
+	@echo "wrote out/functions.tsv"
+
 # Recompress a (possibly modified) out/img.bin into a flashable image.
 repack: $(IMG)
 	$(PY) tools/repack.py $(IMG) -o out/repacked.bin --template $(FW) --chain $(CHAIN)
@@ -60,5 +66,5 @@ test: checksum
 	$(PY) tools/roundtrip_test.py $(FW) --chain $(CHAIN) --workdir out
 
 clean:
-	rm -rf bin out/img.bin out/img.asm out/repacked.bin out/img_rt.bin \
+	rm -rf bin out/img.bin out/img.asm out/functions.tsv out/repacked.bin out/img_rt.bin \
 	       out/img_repacked.bin out/img_mod.bin out/img_mod_repacked.bin out/img_mod_rt.bin
