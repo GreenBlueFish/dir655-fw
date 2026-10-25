@@ -150,7 +150,7 @@ static const struct insn_tmpl *match(uint32_t w)
 }
 
 /* Disassemble one word into text. Returns 1 if a known insn, 0 if unknown.
- * Sets *target/*is_target for branch/call. *is_call set for 'call'. */
+ * Sets *target and *is_target for branch/call; *is_call set for 'call'. */
 static int disasm_one(uint32_t w, uint32_t pc, char *out,
                       uint32_t *target, int *is_target, int *is_call)
 {
