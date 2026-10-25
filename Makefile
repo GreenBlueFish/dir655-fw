@@ -11,7 +11,8 @@
 #   make checksum   - verify the firmware header checksum
 #   make test       - extract + CRC-32, ISA table checks, C-vs-Python disasm diff,
 #                     ubidec decoder/discovery checks, compressor edge-case
-#                     unit tests, and the repack round trip
+#                     unit tests, the repack round trip, and the
+#                     toolchain/ checks (see toolchain/README.md)
 #   make clean
 
 CC      ?= cc
@@ -64,6 +65,7 @@ test: checksum
 	$(PY) tests/run_tests.py
 	$(PY) tests/test_arj_compress.py
 	$(PY) tools/roundtrip_test.py $(FW) --chain $(CHAIN) --workdir out
+	$(PY) toolchain/tests/run_tests.py
 
 clean:
 	rm -rf bin out/img.bin out/img.asm out/functions.tsv out/repacked.bin out/img_rt.bin \

@@ -90,6 +90,23 @@ flash budget. A full repack takes ~15 s in pure Python.
 > checks, are inferred from the format — not confirmed on hardware. Flash at
 > your own risk, ideally with a serial console / recovery (TFTP) path ready.
 
+## Compiling your own C/C++ for the router
+
+[`toolchain/`](toolchain/README.md) is a separate project in this repo. It
+fetches Ubicom's GPL GCC 4.4.5 / binutils 2.19.1 port for Ubicom32, pins
+every download by SHA-256, and builds it. It also links compiled code into
+`out/img.bin`, either in a free 58 KB gap after the image or as hooks that
+replace firmware functions, for `make repack` to pack:
+
+```sh
+make -C toolchain toolchain                      # build ubicom32-elf-gcc etc.
+make extract && make -C toolchain patch SRC=$PWD/my.c  # -> out/img_patched.bin
+make repack IMG=out/img_patched.bin
+```
+
+Unlike the tools above, it is built from third-party (GPL) sources. Nothing
+built with it has been run on a router.
+
 ## Repository layout
 
 ```
@@ -119,6 +136,7 @@ docs/
   functions.txt            4,890 discovered function entry points
   sample_startup.asm       labeled disassembly of the C-runtime startup
 Makefile                   build / extract / disasm / checksum targets
+toolchain/                 separate project: Ubicom32 GCC toolchain + image patcher
 ```
 
 ## What "known instructions" buys you, and what it doesn't

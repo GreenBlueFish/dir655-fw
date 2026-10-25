@@ -1,0 +1,18 @@
+# Pinned sources for the Ubicom32 toolchain. scripts/fetch.sh downloads each
+# file from the first URL that answers and refuses it unless the SHA-256
+# matches. Fields: file  sha256  url [fallback-url ...]
+#
+# GNU release tarballs (GPL). All hashes were cross-checked
+# between ftp.gnu.org and mirrors.kernel.org. MPFR stays at 2.4.x: from 3.1 on
+# its sources live in src/, which GCC 4.4's in-tree build does not look in.
+binutils-2.19.1.tar.bz2  2dbd2c554b70d915c5b32fcfd401d03afcbf202529059c7a80af3993885ad1c2  https://ftp.gnu.org/gnu/binutils/binutils-2.19.1.tar.bz2  https://mirrors.kernel.org/gnu/binutils/binutils-2.19.1.tar.bz2
+gcc-core-4.4.5.tar.bz2   dbf012d5616b51d072383a32f71d4217239e7f0096acb07bbf266529a347ab4b  https://ftp.gnu.org/gnu/gcc/gcc-4.4.5/gcc-core-4.4.5.tar.bz2  https://mirrors.kernel.org/gnu/gcc/gcc-4.4.5/gcc-core-4.4.5.tar.bz2
+gcc-g++-4.4.5.tar.bz2    b543680bd9f2db83ad1f991866251dd505f64c1407c37694f5f66f334a62a721  https://ftp.gnu.org/gnu/gcc/gcc-4.4.5/gcc-g++-4.4.5.tar.bz2  https://mirrors.kernel.org/gnu/gcc/gcc-4.4.5/gcc-g++-4.4.5.tar.bz2
+gmp-6.1.2.tar.xz         87b565e89a9a684fe4ebeeddb8399dce2599f9c9049854ca8c0dfbdea0e21912  https://ftp.gnu.org/gnu/gmp/gmp-6.1.2.tar.xz  https://mirrors.kernel.org/gnu/gmp/gmp-6.1.2.tar.xz
+mpfr-2.4.2.tar.bz2       c7e75a08a8d49d2082e4caee1591a05d11b9d5627514e678f02d66a124bcf2ba  https://ftp.gnu.org/gnu/mpfr/mpfr-2.4.2.tar.bz2  https://mirrors.kernel.org/gnu/mpfr/mpfr-2.4.2.tar.bz2
+#
+# Ubicom's GPL Ubicom32 port, as carried by OpenWrt's (archived) ubicom32
+# target, svn-archive commit 64e5e77b8208f5091dfcbcfb17f0ae0cf10e9be1.
+# Primary: OpenWrt's own git; fallback: a GitHub mirror of the same history.
+binutils-2.19.1-ubicom32.patch  03a6d45a6053e420ebb7308dd0c83785eacd3fcae49bf1db989637a94e9e21bf  https://git.openwrt.org/openwrt/svn-archive/archive/plain/toolchain/binutils/patches/2.19.1/600-ubicom32_binutils_20090818.patch?id=64e5e77b8208f5091dfcbcfb17f0ae0cf10e9be1  https://raw.githubusercontent.com/automa1on/openwrt-archive/64e5e77b8208f5091dfcbcfb17f0ae0cf10e9be1/toolchain/binutils/patches/2.19.1/600-ubicom32_binutils_20090818.patch
+gcc-4.4.5-ubicom32.patch        a49b41f1832ece52f803812d0e0fb6c1374e8c3666db75a4768f49e348e303c3  https://git.openwrt.org/openwrt/svn-archive/archive/plain/toolchain/gcc/patches/4.4.5/600-ubicom_support.patch?id=64e5e77b8208f5091dfcbcfb17f0ae0cf10e9be1  https://raw.githubusercontent.com/automa1on/openwrt-archive/64e5e77b8208f5091dfcbcfb17f0ae0cf10e9be1/toolchain/gcc/patches/4.4.5/600-ubicom_support.patch
