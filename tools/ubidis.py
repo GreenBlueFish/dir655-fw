@@ -87,6 +87,11 @@ def render_op(tok, w, pc):
     if kind == "K_CFLAG": return ("" if xf(w, 21, 1) else ".s"), None
     if kind == "K_PFLAG": return (".t" if xf(w, 22, 1) else ".f"), None
     if kind == "K_SKIP":  return "", None
+    if kind == "K_PDEC":
+        # pdec's source offset: the s1 imm7 field (bits 9:8, 4:0) counts
+        # words down from An - 512, so the operand is An - 4*(128 - off7).
+        off7 = (xf(w, 9, 2) << 5) | xf(w, 4, 5)
+        return "%d" % ((off7 - 128) * 4), None
     return "?", None
 
 

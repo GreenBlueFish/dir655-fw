@@ -133,6 +133,8 @@ def test_c(tmp, img, py_out):
 MIN_FUNCS = 6855
 MIN_COVERED = 334726
 MIN_SWITCH = 131
+MIN_FRAGRET = 110   # returns resolved through an enclosing function's frame
+MAX_LOST_RA = 15    # indirect jumps whose return address is still lost
 
 
 def test_ubidec(img):
@@ -165,6 +167,22 @@ def test_ubidec(img):
     i = at(0x8b4)
     check(i.mn == "pdec" and i.s1.kind == "mem" and i.s1.a == 7
           and i.s1.b == -44, "pdec offset is negative: sp - 44 (%r)" % i.s1)
+    pdec_bad = []
+    for o in range(0, 0x148000, 4):
+        w = int.from_bytes(data[o:o + 4], "big")
+        d = decode(w, BASE + o)
+        if d.mn != "pdec" or not d.valid or ubidis.match(w) is None:
+            continue
+        txt = ubidis.disasm_one(w, BASE + o)[0]
+        if not txt.endswith(",%d(%s)" % (d.s1.b, "sp" if d.s1.a == 7
+                                         else "a%d" % d.s1.a)):
+            pdec_bad.append("0x%x: %s" % (BASE + o, txt))
+    check(not pdec_bad and ubidis.disasm_one(
+        int.from_bytes(data[0x8b4:0x8b8], "big"), BASE + 0x8b4)[0]
+        == "pdec 0x9c,-44(sp)",
+        "ubidis renders every pdec source as An - 4*(128 - off7) "
+        "(%d wrong%s)" % (len(pdec_bad), ", first " + pdec_bad[0]
+                          if pdec_bad else ""))
     i = at(0x1d8)
     check(i.mn == "cmpi" and i.imm == 19, "cmpi immediate in bits 26:11")
     i = at(0x4)
@@ -180,8 +198,15 @@ def test_ubidec(img):
     check(s["blocks"].get("switch", 0) >= MIN_SWITCH,
           "jump tables resolved >= %d (got %d)"
           % (MIN_SWITCH, s["blocks"].get("switch", 0)))
-    check(s["flow_errors"] == 0, "no function flows into data or invalid "
-          "code (%d)" % s["flow_errors"])
+    check(s["flow_errors"] == 0, "no kept function flows into data or invalid "
+          "code (%d; %d pointer/orphan candidates that did were rejected "
+          "before counting)" % (s["flow_errors"], s["rejected"]))
+    check(s["blocks"].get("fragret", 0) >= MIN_FRAGRET,
+          "returns through an enclosing frame >= %d (got %d)"
+          % (MIN_FRAGRET, s["blocks"].get("fragret", 0)))
+    check(s["ijmp"]["lost_ra"] <= MAX_LOST_RA,
+          "indirect jumps with a lost return address <= %d (got %d; %s)"
+          % (MAX_LOST_RA, s["ijmp"]["lost_ra"], s["ijmp"]))
 
 
 def main():

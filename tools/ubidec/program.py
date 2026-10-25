@@ -10,7 +10,11 @@ Entries come from, in order of confidence:
            after the end of a claimed function (code reached only through
            pointers we could not resolve).
 """
-from .machine import Analyzer, BASE
+from .machine import Analyzer, BASE, SP
+
+# Hand-written hardware-thread (HRT) and driver code: register-indexed
+# dispatch, `suspend`, a0 as an I/O base (docs/DECOMPILER.md, "Only assembly").
+HRT_LO, HRT_HI = 0x4000a500, 0x4000e800
 
 
 class Program(object):
@@ -19,6 +23,9 @@ class Program(object):
         self.an = Analyzer(img)
         self.funcs = {}
         self.owner = {}       # insn addr -> set of function entries
+        # pointer/orphan candidates dropped because they flow into data or
+        # invalid code; never added, so flow errors in funcs can't see them
+        self.rejected = []
 
     def _add(self, f, how):
         f.how = how
@@ -72,6 +79,7 @@ class Program(object):
                 continue
             f = self.an.build(c, known | {c})
             if f.asm_reasons:
+                self.rejected.append(f)
                 continue
             known.add(c)
             self._add(f, "pointer"); npt += 1
@@ -90,9 +98,70 @@ class Program(object):
                     self._add(f, "orphan"); norph += 1
                     a += 4
                     continue
+                if f.asm_reasons:
+                    self.rejected.append(f)
             a += 4
         if log: log("orphan entries: %d functions" % norph)
+        n = self.resolve_shared_returns()
+        if log: log("returns through an enclosing frame: %d" % n)
         return self.funcs
+
+    def resolve_shared_returns(self):
+        """Resolve indirect jumps whose return address was lost because the
+        function was entered part-way through another function's frame.
+
+        Switch-case bodies found through pointer tables and alternate entry
+        points start with no saved return address in view, so their
+        `ret (sp)N++` / `ret dN` stays unresolved. When the same instruction
+        is a resolved return in an enclosing function G, it is G's return:
+        the block becomes kind "fragret" and the function records
+        f.parent = G and, when both stack pointers are known there,
+        f.parent_sp = G's entry-relative sp at this function's entry."""
+        rets = {}
+        for g in self.funcs.values():
+            for b in g.blocks.values():
+                if b.kind == "ret":
+                    rets.setdefault(b.insns[-1].addr, []).append(g)
+        n = 0
+        for f in self.funcs.values():
+            for b in f.blocks.values():
+                if b.kind != "ijmp":
+                    continue
+                a = b.insns[-1].addr
+                gs = [g for g in rets.get(a, ()) if g is not f]
+                if not gs:
+                    continue
+                g = min(gs, key=lambda g: g.entry)
+                b.kind = "fragret"; b.target = g.entry
+                n += 1
+                if getattr(f, "parent", None) is not None:
+                    continue
+                f.parent = g.entry
+                fs = f.states[a]["r"].get(SP)
+                gs_ = g.states[a]["r"].get(SP)
+                f.parent_sp = (gs_[1] - fs[1]) if fs and gs_ and \
+                    fs[0] == gs_[0] == "sp" else None
+        return n
+
+    def ijmp_groups(self):
+        """Classify every unresolved indirect jump (block kind "ijmp")."""
+        groups = {"hrt": [], "computed": [], "ram_table": [], "lost_ra": []}
+        for f in self.funcs.values():
+            for b in f.blocks.values():
+                if b.kind != "ijmp":
+                    continue
+                i = b.insns[-1]
+                if HRT_LO <= i.addr < HRT_HI:
+                    g = "hrt"
+                elif i.mn == "calli" and i.s1.a == 0:
+                    g = "computed"       # memcpy/memset unrolled-run jumps
+                else:
+                    r = f.states[i.addr]["r"]
+                    v = r.get(0x80 + i.s1.a * 4) if i.mn == "calli" else None
+                    # a table in on-chip RAM (0x3ffcxxxx), filled at run time
+                    g = "ram_table" if v and v[0] == "tbl" else "lost_ra"
+                groups[g].append((f.entry, i.addr))
+        return groups
 
 
 def _ends_flow(i):

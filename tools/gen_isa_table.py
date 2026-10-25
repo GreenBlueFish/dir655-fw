@@ -143,6 +143,15 @@ for m in pat.finditer(opc):
         elif c.startswith("\\"):
             c = c[1:]
         tmpl.append(("lit", c))
+    if mnem == "pdec":
+        # The reference's pdec source operand would render from the
+        # destination's imm7 bits as a positive offset. The real operand is
+        # the s1 imm7 field read as An - 4*(128 - off7) (the frame it
+        # allocates matches the epilogue's lea sp,N(sp); docs/DECOMPILER.md).
+        # The source is the last operand, so its imm7 is the last one.
+        k = max(n for n, t in enumerate(tmpl)
+                if t[0] == "op" and t[1][0] == "K_IMM7")
+        tmpl[k] = ("op", ("K_PDEC", 0, 0))
     entries.append((base, mask, mnem, tmpl))
 
 # Collapse encodings that the reference lists twice under different names.
