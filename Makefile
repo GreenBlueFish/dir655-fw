@@ -5,6 +5,7 @@
 #   make extract    - decompress the firmware -> out/img.bin (needs python3)
 #   make disasm     - full labeled disassembly of the code region -> out/img.asm
 #   make checksum   - verify the firmware header checksum
+#   make test       - extract + CRC-32, ISA table checks, C-vs-Python disasm diff
 #   make clean
 
 CC      ?= cc
@@ -13,7 +14,7 @@ PY      ?= python3
 FW      ?= dir655_firmware_121.bin
 IMG     ?= out/img.bin
 
-.PHONY: all ubidis extract disasm checksum clean
+.PHONY: all ubidis extract disasm checksum test clean
 
 all: ubidis extract
 
@@ -34,6 +35,9 @@ disasm: $(IMG)
 
 checksum:
 	$(PY) tools/fix_checksum.py --check $(FW)
+
+test: checksum
+	$(PY) tests/run_tests.py
 
 clean:
 	rm -rf bin out/img.bin out/img.asm

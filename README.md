@@ -19,7 +19,7 @@ plus everything needed to get from the raw flash image to readable assembly:
    `img.bin`, **verified against its embedded size and CRC-32** — provably
    correct output.
 3. **A from-scratch Ubicom32 disassembler** (Python + C) that decodes the
-   ~1.28 MB code region at **100% known instructions**, with
+   ~1.28 MB code region at **99.82% known instructions**, with
    **100.000%** of all branch/call targets landing on valid 4-byte boundaries.
    See [`docs/ISA.md`](docs/ISA.md).
 
@@ -40,6 +40,10 @@ python3 tools/extract.py dir655_firmware_121.bin out/img.bin
 # 3. Disassemble the code region to a labeled listing
 python3 tools/ubidis.py --listing -s 0 -n 0x148000 out/img.bin > out/img.asm
 #    ... or:  make disasm
+
+# 4. Run the checks: extract + CRC-32, ISA tables, and (if a C compiler is
+#    present) the C disassembler diffed against the Python one
+make test
 
 # Native (faster) disassembler, if you have a C compiler:
 make ubidis          # builds bin/ubidis
