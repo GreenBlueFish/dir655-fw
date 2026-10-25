@@ -15,7 +15,7 @@ Two subcommands:
       Copy every allocated section of the linked patch into the image at its
       link address, after checking that it lands where it is allowed to.
 
-Memory facts used (docs/DECOMPILER.md, toolchain/README.md):
+Memory facts used (docs/FORMAT.md "Free gap after the image"):
   img.bin runs at 0x40000000. The stock image is 0x641d00 bytes; the
   firmware's startup zeroes .bss from 0x40650000. Nothing in the firmware
   refers to 0x40641d00..0x40650000, so new code and data go there (58,112
