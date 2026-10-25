@@ -73,6 +73,48 @@ python3 tools/fix_checksum.py --check firmware.bin   # verify
 python3 tools/fix_checksum.py --fix   firmware.bin   # recompute in place
 ```
 
+## Rebuilding a flashable image (repacking)
+
+`tools/repack.py` is the inverse of `tools/extract.py`: it takes a (possibly
+modified) `img.bin` and writes a complete flash image. The steps mirror the
+layout above:
+
+1. **Header + loader + ARJ main header** (`0x0000..0x4731`) are copied verbatim
+   from a template firmware (the stock `.bin`). The main header's
+   compressed-size field is `0`, so it is independent of the member payload.
+2. **The member stream is recompressed** with `tools/arj_compress.py`, a
+   from-scratch ARJ method-1 encoder that emits exactly the bitstream
+   `arj_decompress.py` reads (per-block canonical Huffman trees for the
+   literal/length and position alphabets, built with length-limited
+   package-merge; a 64 KiB LZSS window with lazy matching).
+3. **The member local-file header is regenerated**: the compressed size
+   (`+12`), original size (`+16`) and payload CRC-32 (`+20`) are patched in the
+   basic header, and the 4-byte basic-header CRC-32 that follows it is
+   recomputed. (The filename, timestamps and flags are kept from the template.)
+4. **The end-of-archive marker** `60 EA 00 00` is re-emitted after the stream.
+5. **The 4-byte flash trailer** that occupies the last 4 bytes of the stock
+   image (`60 29 00 80` at `0x16FFFC`) is preserved as the final 4 bytes.
+6. The image is **padded with `0xFF` to the flash size** (`0x170000`), and
+   finally the **image-header checksum** (above) is recomputed.
+
+### ARJ header CRCs
+
+ARJ stores, immediately after each basic header, a **CRC-32** (not CRC-16) of
+that basic header's bytes (standard poly `0xEDB88320`). Both the main header
+(`0x0FA52CD2`) and the member header (`0xCB493045`) in the stock image verify
+as `zlib.crc32(basic_bytes)`. `repack.py` recomputes the member header's CRC
+after patching the size/CRC fields.
+
+### Correctness and limits
+
+`make test` recompresses the **unmodified** `img.bin`, re-extracts it, and
+requires a byte-identical result plus a valid header checksum — proving the
+repack path is a true inverse of extract. The encoder's output is ~1.38 MB,
+slightly smaller than the stock 1.45 MB stream, so a repacked image fits the
+flash. **Not verified on hardware:** no repacked image has been flashed to a
+real DIR-655, so the loader's tolerance of a resized compressed member and the
+exact role of the flash trailer remain inferred from the format.
+
 ## Decompressed `img.bin` (6,561,024 bytes)
 
 Entropy and content analysis split it into two broad regions:
