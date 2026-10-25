@@ -1,0 +1,5 @@
+# Derived artifacts (regenerate with `make extract` / `make disasm`)
+/out/
+/bin/
+__pycache__/
+*.pyc
